@@ -1,0 +1,277 @@
+#!/bin/sh
+#
+# zfs-snapshot-clean - sieves ZFS snapshots as per given spec
+#
+# This command is inspired by Plan9's dumpfs, and pdumpfs/pdumpfs-clean.
+#
+# Copyright (c) 2009 Akinori MUSHA
+#
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+
+VERSION=0.1.0
+DRYRUN=
+VERBOSE=
+DEFAULT_DAYSPEC=7D6W6M2Y
+DAYSPEC="$DEFAULT_DAYSPEC"
+PREFIX=
+NDAYS=0
+NWEEKS=0
+NMONTHS=0
+NYEARS=0
+
+version () {
+    cat <<EOF
+zfs-snapshot-clean version $VERSION - sieves ZFS snapshots as per given spec
+EOF
+}
+
+usage () {
+    version
+    cat <<EOF
+Usage: $0 [OPTION ...] {VOLUME|MOUNTPOINT} ...
+  -k DAYSPEC      Specify how snapshots are kept (Default: "$DEFAULT_DAYSPEC")
+  -p PREFIX       Specify the prefix before the date part (Default: none)
+  -n              Do not actually delete snapshots
+  -v              Be verbose
+  -V              Show the version number
+  -h              Show this help
+
+This command is used to automatically destroy ZFS snapshots that are
+not covered by the DAYSPEC, assuming daily snapshots are named in
+the format "YYYY-MM-DD".
+
+By default, ZFS snapshots of the most recent 7 days, 6 Sundays, 6
+months' first days and 2 years' first days are kept.  Non-daily
+snapshots, which do not match "YYYY-MM-DD", are ignored and kept.
+
+Use the -p option if you have a name prefix for the daily snapshots.
+
+EOF
+    exit 64
+}
+
+main () {
+    local option OPTIND OPTARG
+
+    while getopts hVnvk:p: option; do
+        case "$option" in
+            h)
+                usage
+                ;;
+            V)
+                version
+                exit 0
+                ;;
+            n)
+                DRYRUN=t
+                ;;
+            v)
+                VERBOSE=t
+                ;;
+            p)
+                PREFIX="$OPTARG"
+                ;;
+            k)
+                DAYSPEC="$OPTARG"
+                ;;
+            *)
+                usage
+                ;;
+        esac
+    done
+
+    shift "$((OPTIND - 1))"
+
+    if [ $# -eq 0 ]; then
+        echo "$0: no ZFS volume/mountpoint is given"
+        usage
+    fi
+
+    parse_dayspec "$DAYSPEC"
+
+    local ret=0
+
+    for volume; do
+        zfs_snapshot_clean "$volume" || ret="$?"
+    done
+
+    return "$ret"
+}
+
+parse_dayspec () {
+    local spec="$1"; shift
+    local str="$spec" number
+
+    while [ -n "$str" ]; do
+        number="$(expr "$str" : "^\([0-9]*\).*")"
+        if [ -z "$str" ]; then
+            echo "$0: specification format error: $spec" >&2
+            usage
+        fi
+
+        str="${str#"$number"}"
+
+        case "$str" in
+            D*)
+                NDAYS="$number"
+                str="${str#D}"
+                ;;
+            W*)
+                NWEEKS="$number"
+                str="${str#W}"
+                ;;
+            M*)
+                NMONTHS="$number"
+                str="${str#M}"
+                ;;
+            Y*)
+                NYEARS="$number"
+                str="${str#Y}"
+                ;;
+            *)
+                echo "$0: specification format error: $spec" >&2
+                usage
+                ;;
+        esac
+    done
+
+    info "$0 only keeps snapshots of the most recent:"
+    [ $NDAYS   -gt 0 ] && info "- $NDAYS days"
+    [ $NWEEKS  -gt 0 ] && info "- $NWEEKS Sundays"
+    [ $NMONTHS -gt 0 ] && info "- $NMONTHS months' first days"
+    [ $NYEARS  -gt 0 ] && info "- $NYEARS years' first days"
+}
+
+info () {
+    if [ -n "$VERBOSE" ]; then
+        echo "$@"
+    fi
+}
+
+run () {
+    info "Running: $@"
+    if [ -z "$DRYRUN" ]; then
+        "$@"
+    fi
+}
+
+zfs_snapshot_clean () {
+    local volume="$1"; shift
+    local volumename= used avail refer mountpoint=
+    local name date number
+
+    set -- $(zfs list | while read volumename used avail refer mountpoint; do
+            [ "$mountpoint" = - ] && continue
+            if [ "$volume" = "$volumename" -o "$volume" = "$mountpoint" ]; then
+                echo "$volumename $mountpoint"
+                break
+            fi
+    done); volumename="$1"; mountpoint="$2"
+
+    if [ -z "$volumename" -o -z "$mountpoint" ]; then
+        echo "$volume: not a ZFS volume" >&2
+        return 1
+    fi
+
+    {
+        # bit 1
+        { days; weeks; months; years; } | sort -u
+        # bit 2
+        ls -1 "$mountpoint/$PREFIX"/.zfs/snapshot | while read name; do
+            case "$name" in
+                "$PREFIX"[1-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]) ;;
+                *) continue ;;
+            esac
+            date="${name#"$PREFIX"}"
+            echo "$date"
+            echo "$date"
+        done
+    } | sort | uniq -c | while read number date; do
+        if [ "$number" -eq 2 ]; then
+            run zfs destroy "$volumename@$PREFIX$date"
+        fi
+    done
+}
+
+case `date --version 2>/dev/null` in
+    *'Free Software Foundation'*)
+        date_days_ago () {
+            date -d "$1 days ago" +%Y-%m-%d
+        }
+
+        date_months_ago () {
+            date -d "$1 months ago" +%Y-%m-01
+        }
+
+        date_years_ago () {
+            date -d "$1 years ago" +%Y-01-01
+        }
+        ;;
+    *)
+        date_days_ago () {
+            date -v"-${1}d" +%Y-%m-%d
+        }
+
+        date_months_ago () {
+            date -v"-${1}m" +%Y-%m-01
+        }
+
+        date_years_ago () {
+            date -v"-${1}y" +%Y-01-01
+        }
+        ;;
+esac
+
+days () {
+    local i=0; while [ "$i" -lt "$NDAYS" ]; do
+        date_days_ago "$i"
+        i="$((i + 1))"
+    done
+}
+
+weeks () {
+    local b="$(date +%u)"    
+    local i=0; while [ "$i" -lt "$NWEEKS" ]; do
+        date_days_ago "$((b + 7 * i))"
+        i="$((i + 1))"
+    done
+}
+
+months () {
+    local b="$(date +%u)"    
+    local i=0; while [ "$i" -lt "$NMONTHS" ]; do
+        date_months_ago "$i"
+        i="$((i + 1))"
+    done
+}
+
+years () {
+    local b="$(date +%u)"    
+    local i=0; while [ "$i" -lt "$NYEARS" ]; do
+        date_years_ago "$i"
+        i="$((i + 1))"
+    done
+}
+
+main "$@"
