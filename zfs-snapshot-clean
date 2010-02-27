@@ -29,7 +29,7 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
-VERSION=0.1.0
+VERSION=0.1.1
 DRYRUN=
 VERBOSE=
 DEFAULT_DAYSPEC=7D6W6M2Y
@@ -182,7 +182,20 @@ zfs_snapshot_clean () {
     local name date number
 
     set -- $(zfs list | while read volumename used avail refer mountpoint; do
-            [ "$mountpoint" = - ] && continue
+            case "$mountpoint" in
+                -)
+                    continue
+                    ;;
+                legacy)
+                    mount | while read dev on mountpoint options; do
+                        if [ "$dev" = "$volumename" ] && expr "$options" : '.*[( ]zfs[,)].*' > /dev/null; then
+                            echo "$volumename $mountpoint"
+                            break
+                        fi
+                    done
+                    break
+                    ;;
+            esac
             if [ "$volume" = "$volumename" -o "$volume" = "$mountpoint" ]; then
                 echo "$volumename $mountpoint"
                 break
