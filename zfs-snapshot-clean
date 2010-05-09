@@ -48,7 +48,7 @@ case "$(uname -s)" in
         ;;
 esac
 
-VERSION=0.1.1
+VERSION=0.1.2
 DRYRUN=
 VERBOSE=
 DEFAULT_DAYSPEC=7D6W6M2Y
