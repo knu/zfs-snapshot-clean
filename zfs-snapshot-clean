@@ -226,6 +226,8 @@ zfs_snapshot_clean () {
         return 1
     fi
 
+    info "cleaning $volumename"
+
     {
         # bit 1
         { days; weeks; months; years; } | sort -u
