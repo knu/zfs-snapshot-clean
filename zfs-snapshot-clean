@@ -195,31 +195,44 @@ run () {
     fi
 }
 
-zfs_snapshot_clean () {
+zfs_find_fs () {
     local volume="$1"; shift
     local volumename= used avail refer mountpoint=
+
+    zfs list | while read volumename used avail refer mountpoint; do
+        case "$mountpoint" in
+            -)
+                ;;
+            legacy)
+                if mount -v | (
+                        while read dev on mountpoint options; do
+                            if [ "$dev" = "$volumename" ] &&
+                                expr "$options" : '.*[( ]zfs[, )].*' > /dev/null; then
+                                echo "$volumename $mountpoint"
+                                exit 0 
+                            fi
+                        done
+                        exit 1
+                    ); then
+                    break
+                fi
+                ;;
+            *)
+                if [ "$volume" = "$volumename" -o "$volume" = "$mountpoint" ]; then
+                    echo "$volumename $mountpoint"
+                    break
+                fi
+                ;;
+        esac
+    done
+}
+
+zfs_snapshot_clean () {
+    local volume="$1"; shift
+    local volumename= mountpoint=
     local name date number
 
-    set -- $(zfs list | while read volumename used avail refer mountpoint; do
-            case "$mountpoint" in
-                -)
-                    continue
-                    ;;
-                legacy)
-                    mount | while read dev on mountpoint options; do
-                        if [ "$dev" = "$volumename" ] && expr "$options" : '.*[( ]zfs[,)].*' > /dev/null; then
-                            echo "$volumename $mountpoint"
-                            break
-                        fi
-                    done
-                    break
-                    ;;
-            esac
-            if [ "$volume" = "$volumename" -o "$volume" = "$mountpoint" ]; then
-                echo "$volumename $mountpoint"
-                break
-            fi
-    done); volumename="$1"; mountpoint="$2"
+    set -- $(zfs_find_fs "$volume"); volumename="$1"; mountpoint="$2"
 
     if [ -z "$volumename" -o -z "$mountpoint" ]; then
         echo "$volume: not a ZFS volume" >&2
