@@ -72,7 +72,7 @@ EOF
 }
 
 main () {
-    local option OPTIND OPTARG
+    local option
 
     while getopts hVnvk:p: option; do
         case "$option" in
@@ -110,7 +110,7 @@ main () {
 
     parse_dayspec "$DAYSPEC"
 
-    local ret=0
+    local volume ret=0
 
     for volume; do
         zfs_snapshot_clean "$volume" || ret="$?"
