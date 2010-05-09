@@ -29,6 +29,25 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
+case "$(uname -s)" in
+    SunOS)
+        type local >/dev/null 2>&1 || exec /usr/xpg4/bin/sh "$0" "$@"
+        awk () {
+            /usr/xpg4/bin/awk "$@"
+        }
+        for cmd in /usr/gnu/bin/date /usr/sfw/bin/gdate; do
+            if [ -x "$cmd" ]; then
+                DATE_CMD="$cmd"
+                break
+            fi
+        done
+        : ${DATE_CMD:=date}
+        date () {
+            "$DATE_CMD" "$@"
+        }
+        ;;
+esac
+
 VERSION=0.1.1
 DRYRUN=
 VERBOSE=
