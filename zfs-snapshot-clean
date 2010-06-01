@@ -268,7 +268,7 @@ case `date --version 2>/dev/null` in
         }
 
         date_months_ago () {
-            date -d "$1 months ago" +%Y-%m-01
+            date -d "$(date +%Y-%m-15) -$1 months" +%Y-%m-01
         }
 
         date_years_ago () {
