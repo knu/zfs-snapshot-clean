@@ -4,7 +4,7 @@
 #
 # This command is inspired by Plan9's dumpfs, and pdumpfs/pdumpfs-clean.
 #
-# Copyright (c) 2009, 2010 Akinori MUSHA
+# Copyright (c) 2009, 2010, 2011 Akinori MUSHA
 #
 # All rights reserved.
 #
@@ -54,6 +54,7 @@ VERBOSE=
 DEFAULT_DAYSPEC=7D6W6M2Y
 DAYSPEC="$DEFAULT_DAYSPEC"
 PREFIX=
+RECURSIVE=
 NDAYS=0
 NWEEKS=0
 NMONTHS=0
@@ -71,6 +72,7 @@ usage () {
 Usage: $0 [OPTION ...] {VOLUME|MOUNTPOINT} ...
   -k DAYSPEC      Specify how snapshots are kept (Default: "$DEFAULT_DAYSPEC")
   -p PREFIX       Specify the prefix before the date part (Default: none)
+  -r              Delete recursively
   -n              Do not actually delete snapshots
   -v              Be verbose
   -V              Show the version number
@@ -93,7 +95,7 @@ EOF
 main () {
     local option
 
-    while getopts hVnvk:p: option; do
+    while getopts hVnvrk:p: option; do
         case "$option" in
             h)
                 usage
@@ -113,6 +115,9 @@ main () {
                 ;;
             k)
                 DAYSPEC="$OPTARG"
+                ;;
+            r)
+                RECURSIVE=-r
                 ;;
             *)
                 usage
@@ -256,7 +261,7 @@ zfs_snapshot_clean () {
         done
     } | sort | uniq -c | while read number date; do
         if [ "$number" -eq 2 ]; then
-            run zfs destroy "$volumename@$PREFIX$date"
+            run zfs destroy $RECURSIVE "$volumename@$PREFIX$date"
         fi
     done
 }
