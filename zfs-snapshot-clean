@@ -35,13 +35,13 @@ case "`uname -s`" in
         awk () {
             /usr/xpg4/bin/awk "$@"
         }
-        for cmd in /usr/gnu/bin/date /usr/sfw/bin/gdate; do
+        for cmd in /usr/gnu/bin/date /usr/sfw/bin/gdate /usr/local/bin/gdate; do
             if [ -x "$cmd" ]; then
                 DATE_CMD="$cmd"
                 break
             fi
         done
-        : ${DATE_CMD:=date}
+        : ${DATE_CMD:=gdate}
         date () {
             "$DATE_CMD" "$@"
         }
