@@ -76,7 +76,7 @@ Usage: $MYNAME [OPTION ...] {VOLUME|MOUNTPOINT} ...
   -k DAYSPEC      Specify how snapshots are kept (Default: "$DEFAULT_DAYSPEC")
   -p PREFIX       Specify the prefix before the date part (Default: none)
   -r              Delete recursively
-  -n              Do not actually delete snapshots
+  -n              Do not actually delete snapshots; Implies -v
   -v              Be verbose
   -V              Show the version number
   -h              Show this help
@@ -109,6 +109,7 @@ main () {
                 ;;
             n)
                 DRYRUN=t
+                VERBOSE=t
                 ;;
             v)
                 VERBOSE=t
