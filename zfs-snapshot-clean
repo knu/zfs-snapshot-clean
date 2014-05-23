@@ -4,7 +4,7 @@
 #
 # This command is inspired by Plan9's dumpfs, and pdumpfs/pdumpfs-clean.
 #
-# Copyright (c) 2009, 2010, 2011 Akinori MUSHA
+# Copyright (c) 2009, 2010, 2011, 2014 Akinori MUSHA
 #
 # All rights reserved.
 #
@@ -50,7 +50,7 @@ esac
 
 type zfs >/dev/null 2>&1 || PATH="$PATH:/sbin"
 
-VERSION=0.1.3
+VERSION=0.2.0
 MYNAME="${0##*/}"
 DRYRUN=
 VERBOSE=
